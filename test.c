@@ -5,7 +5,10 @@
 #include <assert.h>
 #include "hashmap.h"
 
-static char *sa[]={"", "127637hga", "C Language", "ハッシュ関数"};
+static char *sa[]={
+    "", "127637hga", "C Language", "ハッシュ関数", 
+    "すでにデータが存在する場合は上書きし0を返す。新規データ時は1を返す。",
+    };
 #define MAKE_KEY(key, n) sprintf(key, "%d_%x_%s",n,n,sa[n%(sizeof(sa)/sizeof(char*))]);
 void test_hash_map(int size) {
     int ret;
@@ -106,8 +109,8 @@ int main(int argc, char **argv) {
     hash_map_func = HASH_MAP_FUNC_FNV_1;
     test_main();
 
-    hash_map_func = HASH_MAP_FUNC_FNV_DBG;
-    test_main();
+    hash_map_func = HASH_MAP_FUNC_DBG;
+    //test_main();
 
     return 0;
 }

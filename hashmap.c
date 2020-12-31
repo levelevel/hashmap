@@ -17,6 +17,7 @@ static void rehash(HASH_MAP_t *hash_map);
 static int match(const char *key1, const char *key2);
 static void set_entry(HASH_ENTRY_t *entry, const char *key, void *data);
 
+//ハッシュマップを作成する。
 HASH_MAP_t *new_hash_map(void) {
     HASH_MAP_t *hash_map = calloc(1, sizeof(HASH_MAP_t));
     hash_map->capacity = HASH_MAP_INIT_SIZE;
@@ -24,13 +25,15 @@ HASH_MAP_t *new_hash_map(void) {
     return hash_map;
 }
 
+//ハッシュマップをフリーする。
 void free_hash_map(HASH_MAP_t *hash_map) {
     if (hash_map) {
         for (int i=0; i<hash_map->capacity; i++) {
             HASH_ENTRY_t *entry = &hash_map->array[i];
-            if (entry->key!=TOMBSTONE) free(entry->key);
+            if (entry->key && entry->key!=TOMBSTONE) free(entry->key);
         }
     }
+    free(hash_map->array);
     free(hash_map);
 }
 
@@ -69,7 +72,7 @@ static uint32_t calc_hash(const char *str) {
             return fnv1_hash(str);
         case HASH_MAP_FUNC_FNV_1A:
             return fnv1a_hash(str);
-        case HASH_MAP_FUNC_FNV_DBG:
+        case HASH_MAP_FUNC_DBG:
             return dbg_hash(str);
         default:
             assert(0);
@@ -81,14 +84,14 @@ static void rehash(HASH_MAP_t *hash_map) {
     HASH_MAP_t new_map = {};
     //dump_hash_map(__func__, hash_map, 0);
 
-    //新しいハッシュマップを作成しサイズを拡張する
+    //サイズを拡張した新しいハッシュマップを作成する
     new_map.capacity = hash_map->capacity * HASH_MAP_GROW_FACTOR;
     new_map.array = calloc(new_map.capacity, sizeof(HASH_ENTRY_t));
 
     //すべてのエントリをコピーする
     for (int i=0; i<hash_map->capacity; i++) {
         HASH_ENTRY_t *entry = &hash_map->array[i];
-        if (entry->key != TOMBSTONE && entry->key != NULL) {
+        if (entry->key && entry->key != TOMBSTONE) {
             put_hash_map(&new_map, entry->key, entry->data);
         }
     }
@@ -184,6 +187,10 @@ int del_hash_map(HASH_MAP_t *hash_map, const char *key) {
     assert(0);  //ここに到達することはない
 }
 
+//ハッシュマップをダンプする
+//level=0: 基本情報のみ
+//level=1: 有効なキーすべて
+//level=2: 削除済みも含める
 void dump_hash_map(const char *str, HASH_MAP_t *hash_map, int level) {
     int n_col = 0;
     fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%d%%)", 
@@ -196,13 +203,17 @@ void dump_hash_map(const char *str, HASH_MAP_t *hash_map, int level) {
             if (idx != i) n_col++;
         }
     }
-    fprintf(stderr, ",\tcollison rate=%d%%", n_col*100/hash_map->capacity);
+    fprintf(stderr, ",\tcollision rate=%d%%", n_col*100/hash_map->capacity);
     fputs("\n", stderr);
     if (level>0) {
         for (int i=0; i<hash_map->capacity; i++) {
             HASH_ENTRY_t *entry = &hash_map->array[i];
-            if (entry->key) fprintf(stderr, "%02d: \"%s\", %p\n", i, 
-                entry->key==TOMBSTONE?"TOMBSTONE":entry->key, entry->data);
+            if (!entry->key) continue;
+            if (entry->key!=TOMBSTONE) {
+                fprintf(stderr, "%02d: \"%s\", %p\n", i, entry->key, entry->data);
+            } else if (level>1) {
+                fprintf(stderr, "%02d: \"TOMBSTONE\", %p\n", i, entry->data);
+            }
         }
     }
 }

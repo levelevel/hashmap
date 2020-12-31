@@ -4,9 +4,9 @@
 typedef enum {
     //https://jonosuke.hatenadiary.org/entry/20100406/p1
     //http://www.isthe.com/chongo/tech/comp/fnv/index.html
-    HASH_MAP_FUNC_FNV_1A,  //FNV-1a hash (Default)
-    HASH_MAP_FUNC_FNV_1,   //FNV-1 hash
-    HASH_MAP_FUNC_FNV_DBG, //DEBUG
+    HASH_MAP_FUNC_FNV_1A,   //FNV-1a hash (Default)
+    HASH_MAP_FUNC_FNV_1,    //FNV-1 hash
+    HASH_MAP_FUNC_DBG,      //DEBUG
 } HASH_MAP_FUNC_TYPE_t;
 
 //ハッシュ関数の種類を設定するグローバル変数
@@ -29,7 +29,7 @@ typedef struct {
 //ハッシュマップを作成する。
 HASH_MAP_t *new_hash_map(void);
 
-//ハッシュマップを開放する。
+//ハッシュマップをフリーする。
 void free_hash_map(HASH_MAP_t *hash_map);
 
 //データ書き込み
@@ -47,4 +47,8 @@ int get_hash_map(HASH_MAP_t *hash_map, const char *key, void **data);
 //データが存在しない場合は0を返す。
 int del_hash_map(HASH_MAP_t *hash_map, const char *key);
 
+//ハッシュマップをダンプする
+//level=0: 基本情報のみ
+//level=1: 有効なキーすべて
+//level=2: 削除済みも含める
 void dump_hash_map(const char *str, HASH_MAP_t *hash_map, int level);
