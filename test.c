@@ -15,7 +15,7 @@ void test_hash_map(int size) {
     char key[128];
     void *data;
     HASH_MAP_t *hash_map = new_hash_map();
-    fprintf(stderr, "=== %s: size=%d\n", __func__, size);
+    fprintf(stderr, "=== %s: size=%d * 10\n", __func__, size);
 
     // 0123456789
     // ++++++         put
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
     test_main();
 
     hash_map_func = HASH_MAP_FUNC_DBG;
-    //test_main();
+    test_main();
 
     return 0;
 }

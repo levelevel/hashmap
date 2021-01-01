@@ -58,9 +58,9 @@ static uint32_t fnv1a_hash(const char *str) {
     return hash;
 }
 static uint32_t dbg_hash(const char *str) {
-    uint32_t hash = 11;
+    uint32_t hash = 0;
     for (const char *p=str; *p; p++) {
-        hash *= 11;
+        hash *= 3;
         hash += *p;
     }
     return hash;
@@ -102,8 +102,7 @@ static void rehash(HASH_MAP_t *hash_map) {
 
 //キーの一致チェック
 static int match(const char *key1, const char *key2) {
-    assert(key1);
-    assert(key2);
+    assert(key1 && key2);
     return key1 != TOMBSTONE &&
         strcmp(key1, key2)==0;
 }
