@@ -90,6 +90,7 @@ void test_hash_map(int size) {
     }
 
     free_hash_map(hash_map);
+    free_hash_map(NULL);
 }
 
 void test_main(void) {

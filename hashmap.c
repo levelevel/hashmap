@@ -32,8 +32,8 @@ void free_hash_map(HASH_MAP_t *hash_map) {
             HASH_ENTRY_t *entry = &hash_map->array[i];
             if (entry->key && entry->key!=TOMBSTONE) free(entry->key);
         }
+        free(hash_map->array);
     }
-    free(hash_map->array);
     free(hash_map);
 }
 
@@ -102,9 +102,7 @@ static void rehash(HASH_MAP_t *hash_map) {
 
 //キーの一致チェック
 static int match(const char *key1, const char *key2) {
-    assert(key1 && key2);
-    return key1 != TOMBSTONE &&
-        strcmp(key1, key2)==0;
+    return key1 != TOMBSTONE && strcmp(key1, key2)==0;
 }
 
 //エントリーにキーとデータを設定
