@@ -14,7 +14,7 @@ void test_hash_map(int size) {
     int ret;
     char key[128];
     void *data;
-    HASH_MAP_t *hash_map = new_hash_map();
+    hash_map_t *hash_map = new_hash_map();
     fprintf(stderr, "=== %s: size=%d * 10\n", __func__, size);
 
     // 0123456789
@@ -31,6 +31,8 @@ void test_hash_map(int size) {
         ret = put_hash_map(hash_map, key, ((void*)0)+i);
         assert(ret==1);
     }
+    assert(num_hash_map(hash_map)==6*size);
+
     //既存削除
     for (int i=2*size; i<5*size; i++) {
         MAKE_KEY(key, i);
