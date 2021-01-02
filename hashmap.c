@@ -122,10 +122,9 @@ static int match(const char *key1, const char *key2) {
 
 //エントリーにキーとデータを設定
 static void set_entry(hash_entry_t *entry, const char *key, void *data) {
-    char *buf = malloc(strlen(key)+1);
-    strcpy(buf, key);
-    if (entry->key != TOMBSTONE) free(entry->key);
-    entry->key  = buf;
+    if (entry->key==TOMBSTONE) entry->key = NULL;
+    entry->key = realloc(entry->key, strlen(key)+1);
+    strcpy(entry->key, key);
     entry->data = data;
 }
 
@@ -141,16 +140,24 @@ int put_hash_map(hash_map_t *hash_map, const char *key, void *data) {
  
     uint32_t hash = calc_hash(key);
 
+    hash_entry_t *entry_tombstome = NULL;   //新規データを書き込みできる削除済みアイテム
     for (int i=0; i<hash_map->capacity; i++) {
         int idx = (hash+i) % hash_map->capacity;
         hash_entry_t *entry = &hash_map->array[idx];
         if (entry->key==NULL) {
-            set_entry(entry, key, data);
+            if (entry_tombstome) {
+                set_entry(entry_tombstome, key, data);
+            } else {
+                set_entry(entry, key, data);
+                hash_map->used++;
+            }
             hash_map->num++;
-            hash_map->used++;
             return 1;
+        } else if (entry->key==TOMBSTONE) {
+            if (entry_tombstome==NULL) entry_tombstome = entry;
+            continue;
         } else if (match(entry->key, key)) {
-            set_entry(entry, key, data);
+            entry->data = data;
             return 0;
         }
     }
@@ -186,7 +193,8 @@ int del_hash_map(hash_map_t *hash_map, const char *key) {
     uint32_t hash = calc_hash(key);
 
     for (int i=0; i<hash_map->capacity; i++) {
-        hash_entry_t *entry = &hash_map->array[(hash+i) % hash_map->capacity];
+        int idx = (hash+i) % hash_map->capacity;
+        hash_entry_t *entry = &hash_map->array[idx];
         if (entry->key==NULL) return 0;
         if (match(entry->key, key)) {
             free(entry->key);
@@ -210,8 +218,6 @@ int num_hash_map(hash_map_t *hash_map) {
 //level=2: 削除済みも含める
 void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
     int n_col = 0;
-    fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%d%%)", 
-        str, hash_map->num, hash_map->used, hash_map->capacity, hash_map->num*100/hash_map->capacity);
     for (int i=0; i<hash_map->capacity; i++) {
         hash_entry_t *entry = &hash_map->array[i];
         if (entry->key && entry->key!=TOMBSTONE) {
@@ -220,8 +226,9 @@ void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
             if (idx != i) n_col++;
         }
     }
-    fprintf(stderr, ",\tcollision rate=%d%%", n_col*100/hash_map->capacity);
-    fputs("\n", stderr);
+    fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%d%%),\tcollision=%d%%\n", 
+        str, hash_map->num, hash_map->used, hash_map->capacity, hash_map->num*100/hash_map->capacity,
+        n_col*100/hash_map->capacity);
     if (level>0) {
         for (int i=0; i<hash_map->capacity; i++) {
             hash_entry_t *entry = &hash_map->array[i];
