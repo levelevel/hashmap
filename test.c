@@ -10,12 +10,31 @@ static char *sa[]={
     "すでにデータが存在する場合は上書きし0を返す。新規データ時は1を返す。",
     };
 #define MAKE_KEY(key, n) sprintf(key, "%d_%x_%s",n,n,sa[n%(sizeof(sa)/sizeof(char*))]);
+#define MAKE_DATA(n)     ((void*)0+n)
+
+void test_iterate(hash_map_t *hash_map) {
+    iterator_t *iterator = iterate_hash_map(hash_map);
+    char *key  = NULL;
+    void *data = NULL;
+    int cnt = 0;
+    while (next_ierate(iterator, &key, &data)) {
+        assert(key);
+        cnt++;
+        key = NULL;
+        data = NULL;
+    }
+    assert(cnt==num_hash_map(hash_map));
+    end_iterate(iterator);
+}
+
 void test_hash_map(int size) {
+    fprintf(stderr, "=== %s: size=%d * 10\n", __func__, size);
+
     int ret;
     char key[128];
     void *data;
     hash_map_t *hash_map = new_hash_map();
-    fprintf(stderr, "=== %s: size=%d * 10\n", __func__, size);
+    test_iterate(hash_map);
 
     // 0123456789
     // ++++++         put
@@ -28,7 +47,7 @@ void test_hash_map(int size) {
     //新規追加
     for (int i=0; i<6*size; i++) {
         MAKE_KEY(key, i);
-        ret = put_hash_map(hash_map, key, ((void*)0)+i);
+        ret = put_hash_map(hash_map, key, MAKE_DATA(i));
         assert(ret==1);
     }
     assert(num_hash_map(hash_map)==6*size);
@@ -44,14 +63,14 @@ void test_hash_map(int size) {
     //削除後追加
     for (int i=3*size; i<4*size; i++) {
         MAKE_KEY(key, i);
-        ret = put_hash_map(hash_map, key, ((void*)0)+i);
+        ret = put_hash_map(hash_map, key, MAKE_DATA(i));
         assert(ret==1);
     }
 
     //上書き+新規追加
     for (int i=5*size; i<9*size; i++) {
         MAKE_KEY(key, i);
-        ret = put_hash_map(hash_map, key, ((void*)0)+i);
+        ret = put_hash_map(hash_map, key, MAKE_DATA(i));
         assert(ret==(i<6*size?0:1));
     }
     dump_hash_map(__func__, hash_map, 0);
@@ -61,7 +80,7 @@ void test_hash_map(int size) {
         MAKE_KEY(key, i);
         ret = get_hash_map(hash_map, key, &data);
         assert(ret==1);
-        assert(data==((void*)0)+i);
+        assert(data==MAKE_DATA(i));
     }
     for (int i=2*size; i<3*size; i++) {
         MAKE_KEY(key, i);
@@ -72,7 +91,7 @@ void test_hash_map(int size) {
         MAKE_KEY(key, i);
         ret = get_hash_map(hash_map, key, &data);
         assert(ret==1);
-        assert(data==((void*)0)+i);
+        assert(data==MAKE_DATA(i));
     }
     for (int i=4*size; i<5*size; i++) {
         MAKE_KEY(key, i);
@@ -83,13 +102,16 @@ void test_hash_map(int size) {
         MAKE_KEY(key, i);
         ret = get_hash_map(hash_map, key, &data);
         assert(ret==1);
-        assert(data==((void*)0)+i);
+        assert(data==MAKE_DATA(i));
     }
     for (int i=9*size; i<10*size; i++) {
         MAKE_KEY(key, i);
         ret = get_hash_map(hash_map, key, &data);
         assert(ret==0);
     }
+
+    //イテレート
+    test_iterate(hash_map);
 
     free_hash_map(hash_map);
     free_hash_map(NULL);

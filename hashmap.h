@@ -2,7 +2,7 @@
 //
 //## 機能
 //- キー：文字列、データ：任意のポインタ
-//- 追加・削除・検索
+//- 追加・削除・検索・イテレート
 //- 1エントリ当たり1回のmalloc（キーの保存）
 //- ハッシュ関数は[FNV-1aまたはFNV-1](http://www.isthe.com/chongo/tech/comp/fnv/index.html)
 //
@@ -47,6 +47,20 @@ int del_hash_map(hash_map_t *hash_map, const char *key);
 
 //ハッシュマップのデータ数
 int num_hash_map(hash_map_t *hash_map);
+
+//イテレータ
+typedef struct iterator iterator_t;
+
+//ハッシュマップのイテレータを生成する。
+iterator_t *iterate_hash_map(hash_map_t *hash_map);
+
+//次のデータをkey,dataに設定して1を返す。key、dataにNULL指定可能。
+//次のデータがない場合は0を返す。
+//イテレートする順番はランダム。
+int next_ierate(iterator_t* iterator, char **key, void **data);
+
+//ハッシュマップのイテレータを解放する。
+void end_iterate(iterator_t* iterator);
 
 //ハッシュマップをダンプする
 //level=0: 基本情報のみ
