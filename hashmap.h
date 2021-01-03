@@ -36,7 +36,7 @@ void free_hash_map(hash_map_t *hash_map);
 int put_hash_map(hash_map_t *hash_map, const char *key, void *data);
 
 //キーに対応するデータの取得
-//存在すればdataに値を設定して1を返す。
+//存在すればdataに値を設定して1を返す。dataにNULLを指定できる。
 //存在しなければ0を返す。
 int get_hash_map(hash_map_t *hash_map, const char *key, void **data);
 

@@ -81,6 +81,8 @@ void test_hash_map(int size) {
         ret = get_hash_map(hash_map, key, &data);
         assert(ret==1);
         assert(data==MAKE_DATA(i));
+        ret = get_hash_map(hash_map, key, NULL);
+        assert(ret==1);
     }
     for (int i=2*size; i<3*size; i++) {
         MAKE_KEY(key, i);
