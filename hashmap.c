@@ -21,7 +21,7 @@ typedef struct hash_map {
     int num;                //データ数
     int used;               //配列の使用数（データ数+TOMBSTONE数）
     int capacity;           //配列の最大数
-    hash_entry_t *array;    //配列
+    hash_entry_t *buckets;  //配列
 } hash_map_t;
 
 static uint32_t fnv1a_hash(const char *str);
@@ -36,7 +36,7 @@ static void set_entry(hash_entry_t *entry, const char *key, void *data);
 hash_map_t *new_hash_map(void) {
     hash_map_t *hash_map = calloc(1, sizeof(hash_map_t));
     hash_map->capacity = HASH_MAP_INIT_SIZE;
-    hash_map->array = calloc(HASH_MAP_INIT_SIZE, sizeof(hash_entry_t));
+    hash_map->buckets = calloc(HASH_MAP_INIT_SIZE, sizeof(hash_entry_t));
     return hash_map;
 }
 
@@ -44,10 +44,10 @@ hash_map_t *new_hash_map(void) {
 void free_hash_map(hash_map_t *hash_map) {
     if (hash_map) {
         for (int i=0; i<hash_map->capacity; i++) {
-            hash_entry_t *entry = &hash_map->array[i];
+            hash_entry_t *entry = &hash_map->buckets[i];
             if (entry->key && entry->key!=TOMBSTONE) free(entry->key);
         }
-        free(hash_map->array);
+        free(hash_map->buckets);
     }
     free(hash_map);
 }
@@ -83,10 +83,10 @@ static uint32_t dbg_hash(const char *str) {
 hash_map_func_type_t hash_map_func = HASH_MAP_FUNC_FNV_1A;
 static uint32_t calc_hash(const char *str) {
     switch (hash_map_func) {
-        case HASH_MAP_FUNC_FNV_1:
-            return fnv1_hash(str);
         case HASH_MAP_FUNC_FNV_1A:
             return fnv1a_hash(str);
+        case HASH_MAP_FUNC_FNV_1:
+            return fnv1_hash(str);
         case HASH_MAP_FUNC_DBG:
             return dbg_hash(str);
         default:
@@ -101,17 +101,17 @@ static void rehash(hash_map_t *hash_map) {
 
     //サイズを拡張した新しいハッシュマップを作成する
     new_map.capacity = hash_map->capacity * HASH_MAP_GROW_FACTOR;
-    new_map.array = calloc(new_map.capacity, sizeof(hash_entry_t));
+    new_map.buckets = calloc(new_map.capacity, sizeof(hash_entry_t));
 
     //すべてのエントリをコピーする
     for (int i=0; i<hash_map->capacity; i++) {
-        hash_entry_t *entry = &hash_map->array[i];
+        hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key != TOMBSTONE) {
             put_hash_map(&new_map, entry->key, entry->data);
         }
     }
     assert(hash_map->num==new_map.num);
-    free(hash_map->array);
+    free(hash_map->buckets);
     *hash_map = new_map;
 }
 
@@ -141,7 +141,7 @@ int put_hash_map(hash_map_t *hash_map, const char *key, void *data) {
     int idx = calc_hash(key) % hash_map->capacity;
     hash_entry_t *entry_tombstome = NULL;   //新規データを書き込みできる削除済みアイテム
     for (;;) {
-        hash_entry_t *entry = &hash_map->array[idx];
+        hash_entry_t *entry = &hash_map->buckets[idx];
         if (entry->key==NULL) {
             if (entry_tombstome) {
                 set_entry(entry_tombstome, key, data);
@@ -170,7 +170,7 @@ int get_hash_map(hash_map_t *hash_map, const char *key, void **data) {
     int idx = calc_hash(key) % hash_map->capacity;
 
     for (;;) {
-        hash_entry_t *entry = &hash_map->array[idx];
+        hash_entry_t *entry = &hash_map->buckets[idx];
         if (entry->key==NULL) return 0;
         if (match(entry->key, key)) {
             if (data) *data = entry->data;
@@ -189,7 +189,7 @@ int del_hash_map(hash_map_t *hash_map, const char *key) {
     int idx = calc_hash(key) % hash_map->capacity;
 
     for (;;) {
-        hash_entry_t *entry = &hash_map->array[idx];
+        hash_entry_t *entry = &hash_map->buckets[idx];
         if (entry->key==NULL) return 0;
         if (match(entry->key, key)) {
             free(entry->key);
@@ -228,7 +228,7 @@ int next_ierate(iterator_t* iterator, char **key, void **data) {
     assert(iterator);
     hash_map_t *hash_map = iterator->hash_map;
     for (; iterator->next_idx < hash_map->capacity; iterator->next_idx++) {
-        hash_entry_t *hash_entry = &hash_map->array[iterator->next_idx];
+        hash_entry_t *hash_entry = &hash_map->buckets[iterator->next_idx];
         if (hash_entry->key && hash_entry->key!=TOMBSTONE) {
             if (key)  *key  = hash_entry->key;
             if (data) *data = hash_entry->data;
@@ -251,7 +251,7 @@ void end_iterate(iterator_t* iterator) {
 void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
     int n_col = 0;
     for (int i=0; i<hash_map->capacity; i++) {
-        hash_entry_t *entry = &hash_map->array[i];
+        hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key!=TOMBSTONE) {
             uint32_t hash = calc_hash(entry->key);
             int idx = hash % hash_map->capacity;
@@ -263,7 +263,7 @@ void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
         n_col*100/hash_map->capacity);
     if (level>0) {
         for (int i=0; i<hash_map->capacity; i++) {
-            hash_entry_t *entry = &hash_map->array[i];
+            hash_entry_t *entry = &hash_map->buckets[i];
             if (!entry->key) continue;
             if (entry->key!=TOMBSTONE) {
                 fprintf(stderr, "%02d: \"%s\", %p\n", i, entry->key, entry->data);
