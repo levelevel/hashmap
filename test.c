@@ -17,7 +17,7 @@ void test_iterate(hash_map_t *hash_map) {
     char *key  = NULL;
     void *data = NULL;
     int cnt = 0;
-    while (next_ierate(iterator, &key, &data)) {
+    while (next_iterate(iterator, &key, &data)) {
         assert(key);
         cnt++;
         key = NULL;

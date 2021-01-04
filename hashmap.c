@@ -224,7 +224,7 @@ iterator_t *iterate_hash_map(hash_map_t *hash_map) {
 //次のデータをkey,dataに設定して1を返す。key、dataにNULL指定可能。
 //次のデータがない場合は0を返す。
 //イテレートする順番はランダム。
-int next_ierate(iterator_t* iterator, char **key, void **data) {
+int next_iterate(iterator_t* iterator, char **key, void **data) {
     assert(iterator);
     hash_map_t *hash_map = iterator->hash_map;
     for (; iterator->next_idx < hash_map->capacity; iterator->next_idx++) {
