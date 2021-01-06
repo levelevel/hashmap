@@ -129,15 +129,32 @@ void test_main(void) {
     //test_hash_map(1000000);
 }
 
+void test_speed(int size) {
+    int ret;
+    char key[128];
+    void *data;
+    hash_map_t *hash_map = new_hash_map();
+
+    //新規追加
+    for (int i=0; i<size; i++) {
+        MAKE_KEY(key, i);
+        ret = put_hash_map(hash_map, key, MAKE_DATA(i));
+        assert(ret==1);
+    }
+    dump_hash_map(__func__, hash_map, 0);
+    assert(num_hash_map(hash_map)==size);
+}
+
 int main(int argc, char **argv) {
     //hash_map_func = HASH_MAP_FUNC_FNV_1A;
-    test_main();
+    //test_main();
 
     hash_map_func = HASH_MAP_FUNC_FNV_1;
-    test_main();
+    //test_main();
 
     hash_map_func = HASH_MAP_FUNC_DBG;
-    test_main();
+    //test_main();
 
+    test_speed(1000*10000);
     return 0;
 }

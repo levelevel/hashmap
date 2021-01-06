@@ -6,7 +6,7 @@
 #include "hashmap.h"
 
 #define HASH_MAP_INIT_SIZE      16  //ハッシュテーブルの初期サイズ
-#define HASH_MAP_MAX_CAPACITY   50  //使用率をこれ以下に抑える
+#define HASH_MAP_MAX_CAPACITY   70  //使用率をこれ以下に抑える
 #define HASH_MAP_GROW_FACTOR    2   //リハッシュ時に何倍にするか
 #define TOMBSTONE ((void *)-1)      //削除済みエントリのキー値
 
@@ -250,17 +250,18 @@ void end_iterate(iterator_t* iterator) {
 //level=2: 削除済みも含める
 void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
     int n_col = 0;
+    long long len = 0;
     for (int i=0; i<hash_map->capacity; i++) {
         hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key!=TOMBSTONE) {
-            uint32_t hash = calc_hash(entry->key);
-            int idx = hash % hash_map->capacity;
+            int idx = calc_hash(entry->key) % hash_map->capacity;
             if (idx != i) n_col++;
+            len += strlen(entry->key);
         }
     }
-    fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%d%%),\tcollision=%d%%\n", 
+    fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%d%%),\tcollision=%d%%\tkey_len=%lld\n", 
         str, hash_map->num, hash_map->used, hash_map->capacity, hash_map->num*100/hash_map->capacity,
-        n_col*100/hash_map->capacity);
+        n_col*100/hash_map->capacity, len/hash_map->num);
     if (level>0) {
         for (int i=0; i<hash_map->capacity; i++) {
             hash_entry_t *entry = &hash_map->buckets[i];
