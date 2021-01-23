@@ -20,7 +20,8 @@ typedef struct {
 typedef struct hash_map {
     int num;                //データ数
     int used;               //配列の使用数（データ数+TOMBSTONE数）
-    int capacity;           //配列の最大数
+    int limit;              //配列の使用数の上限（used>limitになるとrehashする）
+    int capacity;           //配列の確保サイズ
     hash_entry_t *buckets;  //配列
 } hash_map_t;
 
@@ -35,8 +36,11 @@ static void set_entry(hash_entry_t *entry, const char *key, void *data);
 //ハッシュマップを作成する。
 hash_map_t *new_hash_map(void) {
     hash_map_t *hash_map = calloc(1, sizeof(hash_map_t));
+    assert(hash_map);
     hash_map->capacity = HASH_MAP_INIT_SIZE;
+    hash_map->limit = (hash_map->capacity * HASH_MAP_MAX_CAPACITY) / 100;
     hash_map->buckets = calloc(HASH_MAP_INIT_SIZE, sizeof(hash_entry_t));
+    assert(hash_map->buckets);
     return hash_map;
 }
 
@@ -101,7 +105,9 @@ static void rehash(hash_map_t *hash_map) {
 
     //サイズを拡張した新しいハッシュマップを作成する
     new_map.capacity = hash_map->capacity * HASH_MAP_GROW_FACTOR;
+    new_map.limit = (new_map.capacity * HASH_MAP_MAX_CAPACITY) / 100;
     new_map.buckets = calloc(new_map.capacity, sizeof(hash_entry_t));
+    assert(new_map.buckets);
 
     //すべてのエントリをコピーする
     for (int i=0; i<hash_map->capacity; i++) {
@@ -134,7 +140,7 @@ static void set_entry(hash_entry_t *entry, const char *key, void *data) {
 int put_hash_map(hash_map_t *hash_map, const char *key, void *data) {
     assert(hash_map);
     assert(key);
-    if ((hash_map->used * 100) / hash_map->capacity > HASH_MAP_MAX_CAPACITY ) {
+    if (hash_map->used > hash_map->limit) {
         rehash(hash_map);
     }
  

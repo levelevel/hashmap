@@ -146,15 +146,16 @@ void test_speed(int size) {
 }
 
 int main(int argc, char **argv) {
+    fprintf(stderr, "Start Test\n");
     //hash_map_func = HASH_MAP_FUNC_FNV_1A;
-    //test_main();
+    test_main();
 
     hash_map_func = HASH_MAP_FUNC_FNV_1;
-    //test_main();
+    test_main();
 
     hash_map_func = HASH_MAP_FUNC_DBG;
-    //test_main();
+    test_main();
 
-    test_speed(1000*10000);
+    //test_speed(1000*10000);
     return 0;
 }
