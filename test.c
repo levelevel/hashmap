@@ -3,7 +3,21 @@
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
+
 #include "hashmap.h"
+
+//CPU時間とメモリを表示
+#include <sys/time.h>
+#include <sys/resource.h>
+void print_usage() {
+#ifdef __linux__
+    struct rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
+    printf("User:   %ld.%03ld sec\n", ru.ru_utime.tv_sec, ru.ru_utime.tv_usec/1000);
+    printf("Sys:    %ld.%03ld sec\n", ru.ru_stime.tv_sec, ru.ru_stime.tv_usec/1000);
+    printf("Memory: %ld MB\n", ru.ru_maxrss/1024);
+#endif
+}
 
 static char *sa[]={
     "", "127637hga", "C Language", "ハッシュ関数", 
@@ -28,7 +42,8 @@ void test_iterate(hash_map_t *hash_map) {
 }
 
 void test_hash_map(int size) {
-    fprintf(stderr, "=== %s: size=%d * 10\n", __func__, size);
+    fprintf(stderr, "=== %s: size=%d * 10, hash_map_func = %d\n",
+        __func__, size, hash_map_func);
 
     int ret;
     char key[128];
@@ -119,43 +134,35 @@ void test_hash_map(int size) {
     free_hash_map(NULL);
 }
 
-void test_main(void) {
-    fprintf(stderr, "===== hash_map_func=%d\n", hash_map_func);
-    test_hash_map(10);
-    test_hash_map(100);
-    test_hash_map(1000);
-    test_hash_map(10000);
-    test_hash_map(100000);
-    //test_hash_map(1000000);
+void test_speed(long size) {
+    printf("== Speed Test: n=%ld\n", size);
+
+    test_hash_map(size);
+
+    //結果表示
+    print_usage();
 }
 
-void test_speed(int size) {
-    int ret;
-    char key[128];
-    void *data;
-    hash_map_t *hash_map = new_hash_map();
+void test_func(void) {
+    int size = 10000;
+    //hash_map_func = HASH_MAP_FUNC_FNV_1A;
+    test_hash_map(size);
 
-    //新規追加
-    for (int i=0; i<size; i++) {
-        MAKE_KEY(key, i);
-        ret = put_hash_map(hash_map, key, MAKE_DATA(i));
-        assert(ret==1);
-    }
-    dump_hash_map(__func__, hash_map, 0);
-    assert(num_hash_map(hash_map)==size);
+    hash_map_func = HASH_MAP_FUNC_FNV_1;
+    test_hash_map(size);
+
+    hash_map_func = HASH_MAP_FUNC_DBG;
+    test_hash_map(size);
+
+    printf("== Functional Test: OK\n");
 }
 
 int main(int argc, char **argv) {
     fprintf(stderr, "Start Test\n");
-    //hash_map_func = HASH_MAP_FUNC_FNV_1A;
-    test_main();
 
-    hash_map_func = HASH_MAP_FUNC_FNV_1;
-    test_main();
+    //test_func();
 
-    hash_map_func = HASH_MAP_FUNC_DBG;
-    test_main();
+    test_speed(100*10000);
 
-    //test_speed(1000*10000);
     return 0;
 }
