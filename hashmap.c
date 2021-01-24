@@ -7,6 +7,7 @@
 
 #define HASH_MAP_INIT_SIZE      16  //ハッシュテーブルの初期サイズ
 #define HASH_MAP_MAX_CAPACITY   70  //使用率をこれ以下に抑える
+#define HASH_MAP_LOW_CAPACITY   50  //リハッシュ時に使用率をこれ以上に保つ
 #define HASH_MAP_GROW_FACTOR    2   //リハッシュ時に何倍にするか
 #define TOMBSTONE ((void *)-1)      //削除済みエントリのキー値
 
@@ -104,10 +105,11 @@ static void rehash(hash_map_t *hash_map) {
     //dump_hash_map(__func__, hash_map, 0);
 
     //サイズを拡張した新しいハッシュマップを作成する
-    new_map.num  = hash_map->num;
-    new_map.used = hash_map->used;
-    new_map.capacity = hash_map->capacity * HASH_MAP_GROW_FACTOR;
-    new_map.limit = (new_map.capacity * HASH_MAP_MAX_CAPACITY) / 100;
+    new_map = *hash_map;
+    if (new_map.num >= (hash_map->capacity * HASH_MAP_LOW_CAPACITY) / 100) {
+        new_map.capacity = hash_map->capacity * HASH_MAP_GROW_FACTOR;
+        new_map.limit = (new_map.capacity * HASH_MAP_MAX_CAPACITY) / 100;
+    }
     new_map.buckets = calloc(new_map.capacity, sizeof(hash_entry_t));
     assert(new_map.buckets);
 
