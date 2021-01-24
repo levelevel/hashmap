@@ -104,6 +104,8 @@ static void rehash(hash_map_t *hash_map) {
     //dump_hash_map(__func__, hash_map, 0);
 
     //サイズを拡張した新しいハッシュマップを作成する
+    new_map.num  = hash_map->num;
+    new_map.used = hash_map->used;
     new_map.capacity = hash_map->capacity * HASH_MAP_GROW_FACTOR;
     new_map.limit = (new_map.capacity * HASH_MAP_MAX_CAPACITY) / 100;
     new_map.buckets = calloc(new_map.capacity, sizeof(hash_entry_t));
@@ -113,10 +115,15 @@ static void rehash(hash_map_t *hash_map) {
     for (int i=0; i<hash_map->capacity; i++) {
         hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key != TOMBSTONE) {
-            put_hash_map(&new_map, entry->key, entry->data);
+            int idx = calc_hash(entry->key) % new_map.capacity;
+            hash_entry_t *new_entry = &new_map.buckets[idx];
+            while (new_entry->key) {
+                if (++idx >= new_map.capacity) idx = 0;
+                new_entry = &new_map.buckets[idx];
+            }
+            *new_entry = *entry;
         }
     }
-    assert(hash_map->num==new_map.num);
     free(hash_map->buckets);
     *hash_map = new_map;
 }
@@ -223,6 +230,7 @@ typedef struct iterator {
 iterator_t *iterate_hash_map(hash_map_t *hash_map) {
     assert(hash_map);
     iterator_t *iterator = calloc(1, sizeof(iterator_t));
+    assert(iterator);
     iterator->hash_map = hash_map;
     return iterator;
 }
