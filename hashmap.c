@@ -28,6 +28,8 @@ typedef struct hash_map {
 
 static uint32_t fnv1a_hash(const char *str);
 static uint32_t fnv1_hash(const char *str);
+static void make_crc_table(void);
+static uint32_t crc32(const char *str);
 static uint32_t dbg_hash(const char *str);
 static uint32_t calc_hash(const char *str);
 static void rehash(hash_map_t *hash_map);
@@ -77,6 +79,29 @@ static uint32_t fnv1_hash(const char *str) {
     }
     return hash;
 }
+
+static uint32_t crc_table[256];
+static int crc_table_computed = 0;
+static void make_crc_table(void) {
+    for (uint32_t i = 0; i < 256; i++) {
+        uint32_t c = i;
+        for (int j = 0; j < 8; j++) {
+            c = (c & 1) ? (0xEDB88320 ^ (c >> 1)) : (c >> 1);
+        }
+        crc_table[i] = c;
+    }
+    crc_table_computed = 1;
+}
+static uint32_t crc32(const char *str) {
+    if (!crc_table_computed) make_crc_table();
+
+    uint32_t c = 0xFFFFFFFF;
+    for (const char *p=str; *p; p++) {
+        c = crc_table[(c ^ *p) & 0xFF] ^ (c >> 8);
+    }
+    return c ^ 0xFFFFFFFF;
+}
+
 static uint32_t dbg_hash(const char *str) {
     uint32_t hash = 0;
     for (const char *p=str; *p; p++) {
@@ -85,6 +110,7 @@ static uint32_t dbg_hash(const char *str) {
     }
     return hash;
 }
+
 hash_map_func_type_t hash_map_func = HASH_MAP_FUNC_FNV_1A;
 static uint32_t calc_hash(const char *str) {
     switch (hash_map_func) {
@@ -92,6 +118,8 @@ static uint32_t calc_hash(const char *str) {
             return fnv1a_hash(str);
         case HASH_MAP_FUNC_FNV_1:
             return fnv1_hash(str);
+        case HASH_MAP_FUNC_CRC32:
+            return crc32(str);
         case HASH_MAP_FUNC_DBG:
             return dbg_hash(str);
         default:

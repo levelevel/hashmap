@@ -15,6 +15,7 @@
 typedef enum {
     HASH_MAP_FUNC_FNV_1A,   //FNV-1a hash (Default)
     HASH_MAP_FUNC_FNV_1,    //FNV-1 hash
+    HASH_MAP_FUNC_CRC32,    //CRC32 hash
     HASH_MAP_FUNC_DBG,      //DEBUG
 } hash_map_func_type_t;
 

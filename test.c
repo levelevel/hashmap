@@ -151,6 +151,9 @@ void test_func(void) {
     hash_map_func = HASH_MAP_FUNC_FNV_1;
     test_hash_map(size);
 
+    hash_map_func = HASH_MAP_FUNC_CRC32;
+    test_hash_map(size);
+
     hash_map_func = HASH_MAP_FUNC_DBG;
     test_hash_map(size);
 
@@ -160,8 +163,11 @@ void test_func(void) {
 int main(int argc, char **argv) {
     fprintf(stderr, "Start Test\n");
 
-    //test_func();
+    test_func();
 
+    hash_map_func = HASH_MAP_FUNC_FNV_1A;
+    test_speed(100*10000);
+    hash_map_func = HASH_MAP_FUNC_CRC32;
     test_speed(100*10000);
 
     return 0;
