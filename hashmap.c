@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 #include <assert.h>
 #include "hashmap.h"
 
@@ -13,7 +14,8 @@
 
 //ハッシュエントリ
 typedef struct {
-    char *key;              //ハッシュキー（文字列）
+    char *key;              //ハッシュキー（バイト列）
+    int keylen;             //ハッシュキーの長さ
     void *data;             //ハッシュデータ（任意のポインタ）
 } hash_entry_t;
 
@@ -26,15 +28,15 @@ typedef struct hash_map {
     hash_entry_t *buckets;  //配列
 } hash_map_t;
 
-static uint32_t fnv1a_hash(const char *str);
-static uint32_t fnv1_hash(const char *str);
+static uint32_t fnv1a_hash(const char *s, int len);
+static uint32_t fnv1_hash(const char *s, int len);
 static void make_crc_table(void);
-static uint32_t crc32(const char *str);
-static uint32_t dbg_hash(const char *str);
-static uint32_t calc_hash(const char *str);
+static uint32_t crc32(const char *s, int len);
+static uint32_t dbg_hash(const char *s, int len);
+static uint32_t calc_hash(const char *s, int len);
 static void rehash(hash_map_t *hash_map);
-static int match(const char *key1, const char *key2);
-static void set_entry(hash_entry_t *entry, const char *key, void *data);
+static void set_entry(hash_entry_t *entry, const char *keykey, int len, void *data);
+void fprint_key(FILE *fp, const unsigned char *key, int keylen);
 
 //ハッシュマップを作成する。
 hash_map_t *new_hash_map(void) {
@@ -59,27 +61,30 @@ void free_hash_map(hash_map_t *hash_map) {
     free(hash_map);
 }
 
+//FNV-1A, FNV-1
 //https://jonosuke.hatenadiary.org/entry/20100406/p1
 //http://www.isthe.com/chongo/tech/comp/fnv/index.html
 #define OFFSET_BASIS32      2166136261  //2^24 + 2^8 + 0x93
 #define FNV_PRIME32         16777619
-static uint32_t fnv1a_hash(const char *str) {
+static uint32_t fnv1a_hash(const char *s, int len) {
     uint32_t hash = OFFSET_BASIS32;
-    for (const char *p=str; *p; p++) {
-        hash ^= *p;
+    for (int i=0; i<len; i++) {
+        hash ^= s[i];
         hash *= FNV_PRIME32;
     }
     return hash;
 }
-static uint32_t fnv1_hash(const char *str) {
+static uint32_t fnv1_hash(const char *s, int len) {
     uint32_t hash = OFFSET_BASIS32;
-    for (const char *p=str; *p; p++) {
+    for (int i=0; i<len; i++) {
         hash *= FNV_PRIME32;
-        hash ^= *p;
+        hash ^= s[i];
     }
     return hash;
 }
 
+//CRC32
+//https://ja.wikipedia.org/wiki/%E5%B7%A1%E5%9B%9E%E5%86%97%E9%95%B7%E6%A4%9C%E6%9F%BB#CRC-32
 static uint32_t crc_table[256];
 static int crc_table_computed = 0;
 static void make_crc_table(void) {
@@ -92,36 +97,36 @@ static void make_crc_table(void) {
     }
     crc_table_computed = 1;
 }
-static uint32_t crc32(const char *str) {
+static uint32_t crc32(const char *s, int len) {
     if (!crc_table_computed) make_crc_table();
 
     uint32_t c = 0xFFFFFFFF;
-    for (const char *p=str; *p; p++) {
-        c = crc_table[(c ^ *p) & 0xFF] ^ (c >> 8);
+    for (int i=0; i<len; i++) {
+        c = crc_table[(c ^ s[i]) & 0xFF] ^ (c >> 8);
     }
     return c ^ 0xFFFFFFFF;
 }
 
-static uint32_t dbg_hash(const char *str) {
+static uint32_t dbg_hash(const char *s, int len) {
     uint32_t hash = 0;
-    for (const char *p=str; *p; p++) {
+    for (int i=0; i<len; i++) {
         hash *= 3;
-        hash += *p;
+        hash += s[i];
     }
     return hash;
 }
 
 hash_map_func_type_t hash_map_func = HASH_MAP_FUNC_FNV_1A;
-static uint32_t calc_hash(const char *str) {
+static uint32_t calc_hash(const char *s, int len) {
     switch (hash_map_func) {
         case HASH_MAP_FUNC_FNV_1A:
-            return fnv1a_hash(str);
+            return fnv1a_hash(s, len);
         case HASH_MAP_FUNC_FNV_1:
-            return fnv1_hash(str);
+            return fnv1_hash(s, len);
         case HASH_MAP_FUNC_CRC32:
-            return crc32(str);
+            return crc32(s, len);
         case HASH_MAP_FUNC_DBG:
-            return dbg_hash(str);
+            return dbg_hash(s, len);
         default:
             assert(0);
     }
@@ -145,7 +150,7 @@ static void rehash(hash_map_t *hash_map) {
     for (int i=0; i<hash_map->capacity; i++) {
         hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key != TOMBSTONE) {
-            int idx = calc_hash(entry->key) % new_map.capacity;
+            int idx = calc_hash(entry->key, entry->keylen) % new_map.capacity;
             hash_entry_t *new_entry = &new_map.buckets[idx];
             while (new_entry->key) {
                 if (++idx >= new_map.capacity) idx = 0;
@@ -158,45 +163,42 @@ static void rehash(hash_map_t *hash_map) {
     *hash_map = new_map;
 }
 
-//キーの一致チェック
-static int match(const char *key1, const char *key2) {
-    return key1 != TOMBSTONE && strcmp(key1, key2)==0;
-}
-
 //エントリーにキーとデータを設定
-static void set_entry(hash_entry_t *entry, const char *key, void *data) {
+static void set_entry(hash_entry_t *entry, const char *key, int keylen, void *data) {
     if (entry->key==TOMBSTONE) entry->key = NULL;
-    entry->key = realloc(entry->key, strlen(key)+1);
-    strcpy(entry->key, key);
+    entry->key = realloc(entry->key, keylen);
+    assert(entry->key);
+    entry->keylen = keylen;
+    memcpy(entry->key, key, keylen);
     entry->data = data;
 }
 
 //データ書き込み
 //すでにデータが存在する場合は上書きし0を返す。新規データ時は1を返す。
 //キーにNULLは指定できない。dataにNULLを指定できる。
-int put_hash_map(hash_map_t *hash_map, const char *key, void *data) {
+int put_hash_map(hash_map_t *hash_map, const char *key, int keylen, void *data) {
     assert(hash_map);
     assert(key);
     if (hash_map->used > hash_map->limit) {
         rehash(hash_map);
     }
  
-    int idx = calc_hash(key) % hash_map->capacity;
+    int idx = calc_hash(key, keylen) % hash_map->capacity;
     hash_entry_t *entry_tombstome = NULL;   //新規データを書き込みできる削除済みアイテム
     for (;;) {
         hash_entry_t *entry = &hash_map->buckets[idx];
         if (entry->key==NULL) {
             if (entry_tombstome) {
-                set_entry(entry_tombstome, key, data);
+                set_entry(entry_tombstome, key, keylen, data);
             } else {
-                set_entry(entry, key, data);
+                set_entry(entry, key, keylen, data);
                 hash_map->used++;
             }
             hash_map->num++;
             return 1;
         } else if (entry->key==TOMBSTONE) {
             if (entry_tombstome==NULL) entry_tombstome = entry;
-        } else if (match(entry->key, key)) {
+        } else if (entry->keylen==keylen && memcmp(entry->key, key, keylen)==0) {
             entry->data = data;
             return 0;
         }
@@ -207,15 +209,15 @@ int put_hash_map(hash_map_t *hash_map, const char *key, void *data) {
 //キーに対応するデータの取得
 //存在すればdataに値を設定して1を返す。dataにNULLを指定できる。
 //存在しなければ0を返す。
-int get_hash_map(hash_map_t *hash_map, const char *key, void **data) {
+int get_hash_map(hash_map_t *hash_map, const char *key, int keylen, void **data) {
     assert(hash_map);
     assert(key);
-    int idx = calc_hash(key) % hash_map->capacity;
+    int idx = calc_hash(key, keylen) % hash_map->capacity;
 
     for (;;) {
         hash_entry_t *entry = &hash_map->buckets[idx];
         if (entry->key==NULL) return 0;
-        if (match(entry->key, key)) {
+        if (entry->keylen==keylen && memcmp(entry->key, key, keylen)==0) {
             if (data) *data = entry->data;
             return 1;
         }
@@ -226,17 +228,18 @@ int get_hash_map(hash_map_t *hash_map, const char *key, void **data) {
 //データの削除
 //キーに対応するデータを削除して1を返す。
 //データが存在しない場合は0を返す。
-int del_hash_map(hash_map_t *hash_map, const char *key) {
+int del_hash_map(hash_map_t *hash_map, const char *key, int keylen) {
     assert(hash_map);
     assert(key);
-    int idx = calc_hash(key) % hash_map->capacity;
+    int idx = calc_hash(key, keylen) % hash_map->capacity;
 
     for (;;) {
         hash_entry_t *entry = &hash_map->buckets[idx];
         if (entry->key==NULL) return 0;
-        if (match(entry->key, key)) {
+        if (entry->keylen==keylen && memcmp(entry->key, key, keylen)==0) {
             free(entry->key);
             entry->key = TOMBSTONE;
+            entry->keylen = 0;
             entry->data = NULL;
             hash_map->num--;
             return 1;
@@ -268,14 +271,15 @@ iterator_t *iterate_hash_map(hash_map_t *hash_map) {
 //次のデータをkey,dataに設定して1を返す。key、dataにNULL指定可能。
 //次のデータがない場合は0を返す。
 //イテレートする順番はランダム。
-int next_iterate(iterator_t* iterator, char **key, void **data) {
+int next_iterate(iterator_t* iterator, char **key, int *keylen, void **data) {
     assert(iterator);
     hash_map_t *hash_map = iterator->hash_map;
     for (; iterator->next_idx < hash_map->capacity; iterator->next_idx++) {
         hash_entry_t *hash_entry = &hash_map->buckets[iterator->next_idx];
         if (hash_entry->key && hash_entry->key!=TOMBSTONE) {
-            if (key)  *key  = hash_entry->key;
-            if (data) *data = hash_entry->data;
+            if (key)    *key    = hash_entry->key;
+            if (keylen) *keylen = hash_entry->keylen;
+            if (data)   *data   = hash_entry->data;
             iterator->next_idx++;
             return 1;
         }
@@ -298,9 +302,9 @@ void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
     for (int i=0; i<hash_map->capacity; i++) {
         hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key!=TOMBSTONE) {
-            int idx = calc_hash(entry->key) % hash_map->capacity;
+            int idx = calc_hash(entry->key, entry->keylen) % hash_map->capacity;
             if (idx != i) n_col++;
-            len += strlen(entry->key);
+            len += entry->keylen;
         }
     }
     fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%d%%),\tcollision=%d%%\tkey_len=%lld\n", 
@@ -311,10 +315,23 @@ void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
             hash_entry_t *entry = &hash_map->buckets[i];
             if (!entry->key) continue;
             if (entry->key!=TOMBSTONE) {
-                fprintf(stderr, "%02d: \"%s\", %p\n", i, entry->key, entry->data);
+                fprintf(stderr, "%02d: \"", i);
+                fprint_key(stderr, entry->key, entry->keylen);
+                fprintf(stderr, "\", %p\n", entry->data);
             } else if (level>1) {
                 fprintf(stderr, "%02d: \"TOMBSTONE\", %p\n", i, entry->data);
             }
+        }
+    }
+}
+//キーをプリントする
+void fprint_key(FILE *fp, const unsigned char *key, int keylen) {
+    for (int i=0; i<keylen; i++) {
+        if (isprint(key[i])) {
+            fputc(key[i], fp);
+        } else {
+            //fprintf(fp, "\\%03o", key[i]);
+            fprintf(fp, "\\x%02x", key[i]);
         }
     }
 }
