@@ -34,7 +34,7 @@ static char *sa[]={
 #define MAKE_DATA(n)     ((void*)0+n)
 
 void test_dump() {
-    hash_map_t *hash_map = new_hash_map();
+    hash_map_t *hash_map = new_hash_map(0, NULL);
     put_hash_map(hash_map, "abc", 3, 0);
     put_hash_map(hash_map, "abc", 4, 0);
     put_hash_map(hash_map, "\0\t\r\n\xff", 5, 0);
@@ -60,14 +60,14 @@ void test_iterate(hash_map_t *hash_map) {
     end_iterate(iterator);
 }
 
-void test_hash_map(int size) {
-    fprintf(stderr, "=== %s: size=%d * 10, hash_map_func = %d\n",
-        __func__, size, hash_map_func);
+//size: データ数
+void test_hash_map(int size, hash_func_t hash_func, const char *func_name) {
+    fprintf(stderr, "=== %s: size=%d * 10, hash_map_func = %s\n",  __func__, size, func_name);
 
     int ret;
     char key[128];
     void *data;
-    hash_map_t *hash_map = new_hash_map();
+    hash_map_t *hash_map = new_hash_map(0, hash_func);
     test_iterate(hash_map);
 
     // 0123456789
@@ -153,13 +153,15 @@ void test_hash_map(int size) {
     free_hash_map(NULL);
 }
 
-void test_speed(long size) {
+//Speed Test
+//size: データ数
+void test_speed(long size, hash_func_t hash_func, const char *func_name) {
     printf("== Speed Test: n=%ld\n", size);
 
     struct rusage ru0;
     getrusage(RUSAGE_SELF, &ru0);
 
-    test_hash_map(size);
+    test_hash_map(size, hash_func, func_name);
 
     //結果表示
     print_usage(&ru0);
@@ -167,17 +169,11 @@ void test_speed(long size) {
 
 void test_func(void) {
     int size = 10000;
-    //hash_map_func = HASH_MAP_FUNC_FNV_1A;
-    test_hash_map(size);
+    test_hash_map(size, NULL, "FNV-1A(Default)");
 
-    hash_map_func = HASH_MAP_FUNC_FNV_1;
-    test_hash_map(size);
+    test_hash_map(size, fnv1_hash, "FNV1-1");
 
-    hash_map_func = HASH_MAP_FUNC_CRC32;
-    test_hash_map(size);
-
-    hash_map_func = HASH_MAP_FUNC_DBG;
-    test_hash_map(size);
+    test_hash_map(size, crc32_hash, "CRC32");
 
     printf("== Functional Test: OK\n");
 }
@@ -189,10 +185,8 @@ int main(int argc, char **argv) {
 
     test_func();
 
-    hash_map_func = HASH_MAP_FUNC_FNV_1A;
-    test_speed(100*10000);
-    hash_map_func = HASH_MAP_FUNC_CRC32;
-    test_speed(100*10000);
+    test_speed(100*10000, fnv1a_hash, "FNV-1A");
+    test_speed(100*10000, crc32_hash, "CRC32");
 
     return 0;
 }

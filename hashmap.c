@@ -26,25 +26,22 @@ typedef struct hash_map {
     int limit;              //配列の使用数の上限（used>limitになるとrehashする）
     int capacity;           //配列の確保サイズ
     hash_entry_t *buckets;  //配列
+    hash_func_t hash_func;  //ハッシュ関数
 } hash_map_t;
 
-static uint32_t fnv1a_hash(const char *s, int len);
-static uint32_t fnv1_hash(const char *s, int len);
 static void make_crc_table(void);
-static uint32_t crc32(const char *s, int len);
-static uint32_t dbg_hash(const char *s, int len);
-static uint32_t calc_hash(const char *s, int len);
 static void rehash(hash_map_t *hash_map);
 static void set_entry(hash_entry_t *entry, const char *keykey, int len, void *data);
 void fprint_key(FILE *fp, const unsigned char *key, int keylen);
 
 //ハッシュマップを作成する。
-hash_map_t *new_hash_map(void) {
+hash_map_t *new_hash_map(size_t init_size, hash_func_t hash_func) {
     hash_map_t *hash_map = calloc(1, sizeof(hash_map_t));
     assert(hash_map);
-    hash_map->capacity = HASH_MAP_INIT_SIZE;
+    hash_map->capacity = init_size?init_size:HASH_MAP_INIT_SIZE;
     hash_map->limit = (hash_map->capacity * HASH_MAP_MAX_CAPACITY) / 100;
     hash_map->buckets = calloc(HASH_MAP_INIT_SIZE, sizeof(hash_entry_t));
+    hash_map->hash_func = hash_func?hash_func:fnv1a_hash;
     assert(hash_map->buckets);
     return hash_map;
 }
@@ -61,12 +58,12 @@ void free_hash_map(hash_map_t *hash_map) {
     free(hash_map);
 }
 
-//FNV-1A, FNV-1
+//FNV-1A(default), FNV-1
 //https://jonosuke.hatenadiary.org/entry/20100406/p1
 //http://www.isthe.com/chongo/tech/comp/fnv/index.html
 #define OFFSET_BASIS32      2166136261  //2^24 + 2^8 + 0x93
 #define FNV_PRIME32         16777619
-static uint32_t fnv1a_hash(const char *s, int len) {
+uint32_t fnv1a_hash(const char *s, int len) {
     uint32_t hash = OFFSET_BASIS32;
     for (int i=0; i<len; i++) {
         hash ^= s[i];
@@ -74,7 +71,7 @@ static uint32_t fnv1a_hash(const char *s, int len) {
     }
     return hash;
 }
-static uint32_t fnv1_hash(const char *s, int len) {
+uint32_t fnv1_hash(const char *s, int len) {
     uint32_t hash = OFFSET_BASIS32;
     for (int i=0; i<len; i++) {
         hash *= FNV_PRIME32;
@@ -97,7 +94,7 @@ static void make_crc_table(void) {
     }
     crc_table_computed = 1;
 }
-static uint32_t crc32(const char *s, int len) {
+uint32_t crc32_hash(const char *s, int len) {
     if (!crc_table_computed) make_crc_table();
 
     uint32_t c = 0xFFFFFFFF;
@@ -105,31 +102,6 @@ static uint32_t crc32(const char *s, int len) {
         c = crc_table[(c ^ s[i]) & 0xFF] ^ (c >> 8);
     }
     return c ^ 0xFFFFFFFF;
-}
-
-static uint32_t dbg_hash(const char *s, int len) {
-    uint32_t hash = 0;
-    for (int i=0; i<len; i++) {
-        hash *= 3;
-        hash += s[i];
-    }
-    return hash;
-}
-
-hash_map_func_type_t hash_map_func = HASH_MAP_FUNC_FNV_1A;
-static uint32_t calc_hash(const char *s, int len) {
-    switch (hash_map_func) {
-        case HASH_MAP_FUNC_FNV_1A:
-            return fnv1a_hash(s, len);
-        case HASH_MAP_FUNC_FNV_1:
-            return fnv1_hash(s, len);
-        case HASH_MAP_FUNC_CRC32:
-            return crc32(s, len);
-        case HASH_MAP_FUNC_DBG:
-            return dbg_hash(s, len);
-        default:
-            assert(0);
-    }
 }
 
 //リハッシュ
@@ -150,7 +122,7 @@ static void rehash(hash_map_t *hash_map) {
     for (int i=0; i<hash_map->capacity; i++) {
         hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key != TOMBSTONE) {
-            int idx = calc_hash(entry->key, entry->keylen) % new_map.capacity;
+            int idx = hash_map->hash_func(entry->key, entry->keylen) % new_map.capacity;
             hash_entry_t *new_entry = &new_map.buckets[idx];
             while (new_entry->key) {
                 if (++idx >= new_map.capacity) idx = 0;
@@ -183,7 +155,7 @@ int put_hash_map(hash_map_t *hash_map, const char *key, int keylen, void *data) 
         rehash(hash_map);
     }
  
-    int idx = calc_hash(key, keylen) % hash_map->capacity;
+    int idx = hash_map->hash_func(key, keylen) % hash_map->capacity;
     hash_entry_t *entry_tombstome = NULL;   //新規データを書き込みできる削除済みアイテム
     for (;;) {
         hash_entry_t *entry = &hash_map->buckets[idx];
@@ -212,7 +184,7 @@ int put_hash_map(hash_map_t *hash_map, const char *key, int keylen, void *data) 
 int get_hash_map(hash_map_t *hash_map, const char *key, int keylen, void **data) {
     assert(hash_map);
     assert(key);
-    int idx = calc_hash(key, keylen) % hash_map->capacity;
+    int idx = hash_map->hash_func(key, keylen) % hash_map->capacity;
 
     for (;;) {
         hash_entry_t *entry = &hash_map->buckets[idx];
@@ -231,7 +203,7 @@ int get_hash_map(hash_map_t *hash_map, const char *key, int keylen, void **data)
 int del_hash_map(hash_map_t *hash_map, const char *key, int keylen) {
     assert(hash_map);
     assert(key);
-    int idx = calc_hash(key, keylen) % hash_map->capacity;
+    int idx = hash_map->hash_func(key, keylen) % hash_map->capacity;
 
     for (;;) {
         hash_entry_t *entry = &hash_map->buckets[idx];
@@ -302,14 +274,14 @@ void dump_hash_map(const char *str, hash_map_t *hash_map, int level) {
     for (int i=0; i<hash_map->capacity; i++) {
         hash_entry_t *entry = &hash_map->buckets[i];
         if (entry->key && entry->key!=TOMBSTONE) {
-            int idx = calc_hash(entry->key, entry->keylen) % hash_map->capacity;
+            int idx = hash_map->hash_func(entry->key, entry->keylen) % hash_map->capacity;
             if (idx != i) n_col++;
             len += entry->keylen;
         }
     }
-    fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%d%%),\tcollision=%d%%\tkey_len=%lld\n", 
-        str, hash_map->num, hash_map->used, hash_map->capacity, hash_map->num*100/hash_map->capacity,
-        n_col*100/hash_map->capacity, len/hash_map->num);
+    fprintf(stderr, "= %s: num=%d,\tused=%d,\tcapacity=%d(%.1f%%),\tcollision=%.1f%%\tkey_len=%lld\n", 
+        str, hash_map->num, hash_map->used, hash_map->capacity, hash_map->num*100.0/hash_map->capacity,
+        n_col*100.0/hash_map->capacity, len/hash_map->num);
     if (level>0) {
         for (int i=0; i<hash_map->capacity; i++) {
             hash_entry_t *entry = &hash_map->buckets[i];

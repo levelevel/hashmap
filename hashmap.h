@@ -14,21 +14,20 @@
 //- [chibicc: A Small C Compiler](https://github.com/rui314/chibicc)
 
 //ハッシュ関数の種類
-typedef enum {
-    HASH_MAP_FUNC_FNV_1A,   //FNV-1a hash (Default)
-    HASH_MAP_FUNC_FNV_1,    //FNV-1 hash
-    HASH_MAP_FUNC_CRC32,    //CRC32 hash
-    HASH_MAP_FUNC_DBG,      //DEBUG
-} hash_map_func_type_t;
+uint32_t fnv1a_hash(const char *s, int len);    //FNV-1a hash (Default)
+uint32_t fnv1_hash (const char *s, int len);    //FNV-1 hash
+uint32_t crc32_hash(const char *s, int len);    //CRC32 hash
 
-//ハッシュ関数の種類を設定するグローバル変数
-extern hash_map_func_type_t hash_map_func;
+//ハッシュ関数
+typedef uint32_t(*hash_func_t)(const char *s, int len);
 
 //ハッシュマップ
 typedef struct hash_map hash_map_t;
 
 //ハッシュマップを作成する。
-hash_map_t *new_hash_map(void);
+//init_sizeが0の場合はデフォルト値(16)を用いる。
+//hash_funcがNULLの場合はfnv1a_hashを用いる。
+hash_map_t *new_hash_map(size_t init_size, hash_func_t hash_func);
 
 //ハッシュマップをフリーする。
 void free_hash_map(hash_map_t *hash_map);
